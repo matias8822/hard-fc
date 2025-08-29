@@ -314,11 +314,120 @@ export default function App() {
     >
       <PlayerStyles />
 
+      <style>{`
+        @media (max-width: 430px) {
+          :root { --control-h: 32px; }
+
+          .topbar {
+            grid-template-columns: 1fr !important;
+            row-gap: 8px;
+            padding: 8px 10px !important;
+          }
+
+          .brand img { height: 64px !important; width: 64px !important; }
+          .brand div { font-size: 18px !important; }
+
+          /* --- FORMACIONES --- */
+          .formations { 
+            flex-direction: column;
+            align-items: center;
+            gap: 8px !important;
+          }
+
+          .formations__schemes {
+            flex-wrap: nowrap !important;
+            justify-content: center !important;
+            overflow-x: visible !important;
+            gap: 6px !important;
+          }
+          .formations__schemes .btn {
+            padding: 0 10px !important;
+            min-width: auto !important;
+            flex: 0 0 auto;
+            white-space: nowrap;
+          }
+
+          /* --- ACCIONES --- */
+          .formations__actions {
+            justify-content: center !important;
+            gap: 8px !important;
+          }
+          .formations__actions .btn {
+            padding: 0 12px !important;
+            min-width: auto !important;
+          }
+
+          /* --- PRESETS --- */
+          .presets { 
+            justify-content: stretch !important; 
+            flex-wrap: wrap !important; 
+            gap: 6px !important; 
+          }
+          .presets input.control { min-width: 160px !important; flex: 1 1 auto; }
+          .presets .btn { padding: 0 10px; }
+          .presets .select-dark { min-width: 120px; }
+
+          /* --- ALTA DE JUGADORES --- */
+          .adder { padding: 0 10px !important; }
+          .adder input { width: 160px !important; }
+          .chip { width: 36px; padding: 6px 0; }
+
+          /* --- MARCAS DE AGUA --- */
+          .field-watermark { opacity: .14 !important; width: 22% !important; }
+
+          /* El bloque de nombre + números queda fijo arriba al hacer scroll */
+          .adder {
+            position: sticky;
+            top: 0;                /* se pega arriba */
+            z-index: 7;            /* sobre la cancha */
+            background: linear-gradient(180deg, rgba(20,24,38,.97) 0%, rgba(20,24,38,.92) 100%);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px); /* iOS */
+            border-bottom: 1px solid rgba(255,255,255,.08);
+            padding: 8px 12px !important;       /* un poquito más de aire */
+
+          /* Sombra suave para separar visualmente del campo al scrollear */
+          .adder {
+            box-shadow: 0 6px 16px rgba(0,0,0,.25); }
+        }
+        @media (max-width: 360px) {
+          /* Formaciones todavía más compactas */
+          .formations__schemes .btn {
+            padding: 0 8px !important;   /* más angosto todavía */
+            min-width: auto !important;
+          }
+
+          /* Acciones también más apretadas */
+          .formations__actions .btn {
+            padding: 0 10px !important;
+          }
+
+          /* Input de presets más corto */
+          .presets input.control {
+            min-width: 130px !important;
+          }
+
+          /* Input para nombres de jugadores más chico */
+          .adder input {
+            width: 140px !important;
+          }
+
+          /* Chips de números más chicos */
+          .chip {
+            width: 32px;
+            padding: 5px 0;
+            font-size: 13px;
+          }
+
+          /* Logo de marca más chico */
+          .brand img { height: 54px !important; width: 54px !important; }
+          .brand div { font-size: 16px !important; }
+        }
+      `}</style>
+
       {/* Top bar */}
-      <div
+      <div className="topbar"
         style={{
-          position: "sticky",
-          top: 0,
           zIndex: 5,
           display: "grid",
           gridTemplateColumns: "1fr auto 1fr",
@@ -332,7 +441,7 @@ export default function App() {
         }}
       >
         {/* Marca */}
-        <div style={{ display: "flex", alignItems: "center", gap: px(8) }}>
+        <div className="brand" style={{ display: "flex", alignItems: "center", gap: px(8) }}>
           <img
             src={LOGO_IMG}
             alt="HARD F.C."
@@ -345,6 +454,7 @@ export default function App() {
 
         {/* Formaciones */}
         <div
+          className="formations"
           style={{
             display: "flex",
             gap: px(6),
@@ -353,35 +463,46 @@ export default function App() {
             alignItems: "center",
           }}
         >
-          {["3-2-2", "3-3-1", "2-3-2", "2-2-3"].map((f) => (
-            <button
-              key={f}
-              onClick={() => setFormation(f)}
-              className="btn control"
-              style={{
-                border:
-                  formation === f
-                    ? "1px solid rgba(255,255,255,.9)"
-                    : "1px solid rgba(255,255,255,.2)",
-                background:
-                  formation === f
-                    ? "linear-gradient(180deg,#3b82f6,#2563eb)"
-                    : "rgba(255,255,255,.05)",
-              }}
-            >
-              {f}
+          {/* Fila 1: SOLO las formaciones */}
+          <div className="formations__row formations__schemes"
+            style={{ display: "flex", gap: px(6), justifyContent: "center", flexWrap: "wrap" }}
+          >
+            {["3-2-2", "3-3-1", "2-3-2", "2-2-3"].map((f) => (
+              <button
+                key={f}
+                onClick={() => setFormation(f)}
+                className="btn control"
+                style={{
+                  border:
+                    formation === f
+                      ? "1px solid rgba(255,255,255,.9)"
+                      : "1px solid rgba(255,255,255,.2)",
+                  background:
+                    formation === f
+                      ? "linear-gradient(180deg,#3b82f6,#2563eb)"
+                      : "rgba(255,255,255,.05)",
+                }}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+
+          {/* Fila 2: Acciones (reiniciar/limpiar) */}
+          <div className="formations__row formations__actions"
+            style={{ display: "flex", gap: px(6), justifyContent: "center", flexWrap: "wrap" }}
+          >
+            <button onClick={resetPositions} className="btn btn--warn control">
+              Reiniciar posiciones
             </button>
-          ))}
-          <button onClick={resetPositions} className="btn btn--warn control">
-            Reiniciar posiciones
-          </button>
-          <button onClick={clearField} className="btn btn--danger control">
-            Limpiar cancha
-          </button>
+            <button onClick={clearField} className="btn btn--danger control">
+              Limpiar cancha
+            </button>
+          </div>
         </div>
 
         {/* Presets + PNG (UNA FILA, sin wrap) */}
-        <div
+        <div className="presets"
           style={{
             display: "flex",
             gap: px(8),
@@ -455,7 +576,7 @@ export default function App() {
       </div>
 
       {/* Alta rápida + Números */}
-      <div
+      <div className="adder"
         style={{
           maxWidth: px(1000),
           margin: "10px auto 0",
@@ -535,6 +656,7 @@ export default function App() {
         >
           {/* Marca de agua inferior izquierda */}
           <img
+            className="field-watermark"
             src={LOGO_IMG}
             alt="HARD FC"
             style={{
@@ -551,6 +673,7 @@ export default function App() {
           />
           {/* Marca de agua superior derecha */}
           <img
+            className="field-watermark"
             src={LOGO_IMG}
             alt="HARD FC"
             style={{
@@ -651,6 +774,7 @@ export default function App() {
   );
 }
 
+
 //Cada cambio es:
 //git add .
 //git commit -m "cambio X"
@@ -660,4 +784,3 @@ export default function App() {
 //*CUANDO GUARDAS UNA FORMACION QUE SE BORRE EL NOMBRE DEL INPUT
 //*FOTOS A LOS JUGADORES PREDETERMINADOS
 //*EQUIPOS A Y B
-//*CUANDO ABRIS EL DESPLEGABLE DE LOS EQUIPOS GUARDADOS QUE SE VEAN LOS NOMBRES
