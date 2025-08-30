@@ -14,7 +14,7 @@ const PRESETS_KEY = "alineador8v8_presets_v1";
 
 // Tamaños compactos
 const PLAYER_SIZE = 56;
-const FIELD_HEIGHT = "min(72vh, calc(100vh - 220px))";
+const FIELD_HEIGHT = "min(72dvh, calc(100dvh - 240px))"; // dvh + margen de seguridad
 const FIELD_MAX_W = "min(92vw, 620px)";
 
 // ========= helpers de nombre =========
@@ -272,6 +272,8 @@ export default function App() {
   // ------- estilos globales (controles iguales + select oscuro) -------
   const PlayerStyles = () => (
     <style>{`
+      html, body { margin: 0; }
+
       .player { transition: transform .14s ease, box-shadow .14s ease, filter .14s ease; }
       .player:hover { transform: translate(-50%, -50%) scale(1.045); box-shadow: 0 12px 22px rgba(0,0,0,.55), inset 0 0 22px rgba(255,255,255,.45); filter: saturate(1.08); }
       .player--dragging { transform: translate(-50%, -50%) scale(0.98)!important; box-shadow: 0 6px 14px rgba(0,0,0,.5), inset 0 0 16px rgba(255,255,255,.35); cursor: grabbing!important; }
@@ -285,7 +287,6 @@ export default function App() {
       .btn--success { background: linear-gradient(180deg,#22c55e,#16a34a); border-color: rgba(34,197,94,.4); color:#04120a; }
       .chip { padding:7px 9px; width:40px; border-radius:12px; border:1px solid rgba(255,255,255,.18); font-weight:800; }
 
-      /* Misma altura para todo y gaps más chicos */
       :root { --control-h: 34px; }
       .control { height: var(--control-h); display:inline-flex; align-items:center; border-radius:10px; }
       .btn.control { padding: 0 12px; line-height: 1; }
@@ -299,13 +300,32 @@ export default function App() {
       }
       .select-dark option { background:#212532; color:#fff; }
       .select-dark option:hover, .select-dark option:checked { background:#1f2937; color:#fff; }
+
+      /* --- Desktop: matar scroll fantasma fijando altura exacta --- */
+      @media (min-width: 900px) {
+        .app-root {
+          height: 100dvh;
+          overflow: hidden;
+        }
+      }
+      @supports not (height: 100dvh) {
+        @media (min-width: 900px) {
+          .app-root { height: calc(100vh - 1px); } /* restamos 1px para redondeo */
+        }
+      }
+
+      /* --- Fallback para navegadores sin dvh: ajustar cancha --- */
+      @supports not (height: 100dvh) {
+        .field-fallback { height: calc(100vh - 240px); }
+      }
     `}</style>
   );
 
   return (
     <div
+      className="app-root"
       style={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         background: "#0b1320",
         color: "#e9f2ff",
         fontFamily:
@@ -333,7 +353,6 @@ export default function App() {
             align-items: center;
             gap: 8px !important;
           }
-
           .formations__schemes {
             flex-wrap: nowrap !important;
             justify-content: center !important;
@@ -375,58 +394,34 @@ export default function App() {
           /* --- MARCAS DE AGUA --- */
           .field-watermark { opacity: .14 !important; width: 22% !important; }
 
-          /* El bloque de nombre + números queda fijo arriba al hacer scroll */
+          /* --- Hacer sticky el bloque de nombre + números --- */
           .adder {
             position: sticky;
-            top: 0;                /* se pega arriba */
-            z-index: 7;            /* sobre la cancha */
+            top: 0;
+            z-index: 7;
             background: linear-gradient(180deg, rgba(20,24,38,.97) 0%, rgba(20,24,38,.92) 100%);
             backdrop-filter: blur(6px);
-            -webkit-backdrop-filter: blur(6px); /* iOS */
+            -webkit-backdrop-filter: blur(6px);
             border-bottom: 1px solid rgba(255,255,255,.08);
-            padding: 8px 12px !important;       /* un poquito más de aire */
-
-          /* Sombra suave para separar visualmente del campo al scrollear */
-          .adder {
-            box-shadow: 0 6px 16px rgba(0,0,0,.25); }
+            padding: 8px 12px !important;
+            box-shadow: 0 6px 16px rgba(0,0,0,.25);
+          }
         }
+
         @media (max-width: 360px) {
-          /* Formaciones todavía más compactas */
-          .formations__schemes .btn {
-            padding: 0 8px !important;   /* más angosto todavía */
-            min-width: auto !important;
-          }
-
-          /* Acciones también más apretadas */
-          .formations__actions .btn {
-            padding: 0 10px !important;
-          }
-
-          /* Input de presets más corto */
-          .presets input.control {
-            min-width: 130px !important;
-          }
-
-          /* Input para nombres de jugadores más chico */
-          .adder input {
-            width: 140px !important;
-          }
-
-          /* Chips de números más chicos */
-          .chip {
-            width: 32px;
-            padding: 5px 0;
-            font-size: 13px;
-          }
-
-          /* Logo de marca más chico */
+          .formations__schemes .btn { padding: 0 8px !important; min-width: auto !important; }
+          .formations__actions .btn { padding: 0 10px !important; }
+          .presets input.control { min-width: 130px !important; }
+          .adder input { width: 140px !important; }
+          .chip { width: 32px; padding: 5px 0; font-size: 13px; }
           .brand img { height: 54px !important; width: 54px !important; }
           .brand div { font-size: 16px !important; }
         }
       `}</style>
 
       {/* Top bar */}
-      <div className="topbar"
+      <div
+        className="topbar"
         style={{
           zIndex: 5,
           display: "grid",
@@ -464,7 +459,8 @@ export default function App() {
           }}
         >
           {/* Fila 1: SOLO las formaciones */}
-          <div className="formations__row formations__schemes"
+          <div
+            className="formations__row formations__schemes"
             style={{ display: "flex", gap: px(6), justifyContent: "center", flexWrap: "wrap" }}
           >
             {["3-2-2", "3-3-1", "2-3-2", "2-2-3"].map((f) => (
@@ -489,7 +485,8 @@ export default function App() {
           </div>
 
           {/* Fila 2: Acciones (reiniciar/limpiar) */}
-          <div className="formations__row formations__actions"
+          <div
+            className="formations__row formations__actions"
             style={{ display: "flex", gap: px(6), justifyContent: "center", flexWrap: "wrap" }}
           >
             <button onClick={resetPositions} className="btn btn--warn control">
@@ -502,13 +499,14 @@ export default function App() {
         </div>
 
         {/* Presets + PNG (UNA FILA, sin wrap) */}
-        <div className="presets"
+        <div
+          className="presets"
           style={{
             display: "flex",
             gap: px(8),
             justifyContent: "flex-end",
             alignItems: "center",
-            flexWrap: "nowrap",       // 🔒 no permite salto de línea
+            flexWrap: "nowrap",
           }}
         >
           <input
@@ -527,11 +525,7 @@ export default function App() {
             }}
           />
 
-          <button
-            className="btn btn--success control"
-            onClick={savePreset}
-            title="Guardar plantel"
-          >
+          <button className="btn btn--success control" onClick={savePreset} title="Guardar plantel">
             Guardar
           </button>
 
@@ -549,34 +543,23 @@ export default function App() {
             ))}
           </select>
 
-          <button
-            className="btn btn--primary control"
-            onClick={loadPreset}
-            title="Cargar plantel seleccionado"
-          >
+          <button className="btn btn--primary control" onClick={loadPreset} title="Cargar plantel seleccionado">
             Cargar
           </button>
 
-          <button
-            className="btn btn--danger control"
-            onClick={deletePreset}
-            title="Borrar plantel seleccionado"
-          >
+          <button className="btn btn--danger control" onClick={deletePreset} title="Borrar plantel seleccionado">
             Borrar
           </button>
 
-          <button
-            className="btn btn--neutral control"
-            onClick={exportPNG}
-            title="Exportar PNG"
-          >
+          <button className="btn btn--neutral control" onClick={exportPNG} title="Exportar PNG">
             PNG
           </button>
         </div>
       </div>
 
       {/* Alta rápida + Números */}
-      <div className="adder"
+      <div
+        className="adder"
         style={{
           maxWidth: px(1000),
           margin: "10px auto 0",
@@ -638,6 +621,7 @@ export default function App() {
       >
         <div
           ref={fieldRef}
+          className="field-fallback"
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           style={{
@@ -773,6 +757,7 @@ export default function App() {
     </div>
   );
 }
+
 
 
 //Cada cambio es:
