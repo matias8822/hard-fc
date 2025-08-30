@@ -778,9 +778,6 @@ export default function App() {
   );
 }
 
-
-
-
 //Cada cambio es:
 //git add .
 //git commit -m "cambio X"
