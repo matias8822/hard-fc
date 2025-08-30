@@ -144,6 +144,9 @@ export default function App() {
   const fieldRef = useRef(null);
   const layout = useMemo(() => buildLayout(formation), [formation]);
 
+  // 👉 NUEVO: recordamos último click para detectar doble click
+  const lastClick = useRef({ num: null, ts: 0 });
+
   useEffect(() => {
     setPlayers((prev) =>
       prev.map((p) => (layout[p.num] ? { ...p, ...layout[p.num] } : p))
@@ -220,11 +223,13 @@ export default function App() {
   const removePlayer = (num) =>
     setPlayers((prev) => prev.filter((p) => p.num !== num));
 
-  // ------ drag libre X/Y + click corto elimina
+  // ------ drag libre X/Y + click corto (ahora doble click para eliminar)
   const onPointerDown = (e, num) => {
+    e.preventDefault(); // evita scroll en mobile
     e.currentTarget.setPointerCapture(e.pointerId);
     setDragging({ num, startX: e.clientX, startY: e.clientY, moved: false });
   };
+
   const onPointerMove = (e) => {
     if (!dragging) return;
     const rect = fieldRef.current?.getBoundingClientRect();
@@ -239,11 +244,23 @@ export default function App() {
     );
     setDragging((d) => ({ ...d, moved }));
   };
+
   const onPointerUp = () => {
     if (!dragging) return;
     const d = dragging;
     setDragging(null);
-    if (!d.moved) removePlayer(d.num);
+
+    if (!d.moved) {
+      const now = Date.now();
+      if (lastClick.current.num === d.num && now - lastClick.current.ts < 500) {
+        // segundo click rápido sobre el mismo jugador -> eliminar
+        removePlayer(d.num);
+        lastClick.current = { num: null, ts: 0 };
+      } else {
+        // primer click: guardamos y esperamos el segundo
+        lastClick.current = { num: d.num, ts: now };
+      }
+    }
   };
 
   // ------ export PNG
@@ -274,7 +291,10 @@ export default function App() {
     <style>{`
       html, body { margin: 0; }
 
-      .player { transition: transform .14s ease, box-shadow .14s ease, filter .14s ease; }
+      .player {
+        transition: transform .14s ease, box-shadow .14s ease, filter .14s ease;
+        touch-action: none; /* evita que el scroll se active al arrastrar en celular */
+      }
       .player:hover { transform: translate(-50%, -50%) scale(1.045); box-shadow: 0 12px 22px rgba(0,0,0,.55), inset 0 0 22px rgba(255,255,255,.45); filter: saturate(1.08); }
       .player--dragging { transform: translate(-50%, -50%) scale(0.98)!important; box-shadow: 0 6px 14px rgba(0,0,0,.5), inset 0 0 16px rgba(255,255,255,.35); cursor: grabbing!important; }
 
@@ -711,7 +731,7 @@ export default function App() {
                     "0 1px 0 rgba(255,255,255,.7), 0 0 6px rgba(255,255,255,.45)",
                   fontWeight: 900,
                 }}
-                title="Arrastrá para mover. Click rápido para eliminar."
+                title="Arrastrá para mover. Doble click rápido para eliminar."
               >
                 <div style={{ fontSize: "22px", lineHeight: 1 }}>{p.num}</div>
 
@@ -751,12 +771,13 @@ export default function App() {
             userSelect: "none",
           }}
         >
-          Arrastrá libre (X/Y). <b>Click</b> rápido sobre un jugador = eliminar.
+          Arrastrá libre (X/Y). <b>Doble click</b> rápido sobre un jugador = eliminar.
         </div>
       </div>
     </div>
   );
 }
+
 
 
 
@@ -769,3 +790,4 @@ export default function App() {
 //*CUANDO GUARDAS UNA FORMACION QUE SE BORRE EL NOMBRE DEL INPUT
 //*FOTOS A LOS JUGADORES PREDETERMINADOS
 //*EQUIPOS A Y B
+//que el PNG incluya nombre del plantel,
