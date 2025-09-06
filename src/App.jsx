@@ -783,8 +783,10 @@ export default function App() {
 //git commit -m "cambio X"
 //git push
 
+//git restore src/App.jsx
+
 //-------MEJORASS---------//
 //*CUANDO GUARDAS UNA FORMACION QUE SE BORRE EL NOMBRE DEL INPUT
 //*FOTOS A LOS JUGADORES PREDETERMINADOS
 //*EQUIPOS A Y B
-//que el PNG incluya nombre del plantel,
+//que el PNG incluya nombre del plantel
