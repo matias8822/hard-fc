@@ -98,30 +98,30 @@ function buildLayout(formation) {
     P[3] = { x: X.L, y: Y.DEF };
     P[2] = { x: X.C, y: Y.DEF };
     P[4] = { x: X.R, y: Y.DEF };
-    P[5] = { x: X.LM, y: Y.MID };
-    P[10] = { x: X.RM, y: Y.MID };
-    P[7] = { x: X.LM, y: Y.FWD };
-    P[9] = { x: X.RM, y: Y.FWD };
+    P[10] = { x: X.LM, y: Y.MID };
+    P[5] = { x: X.RM, y: Y.MID };
+    P[9] = { x: X.LM, y: Y.FWD };
+    P[7] = { x: X.RM, y: Y.FWD };
   }
 
   if (formation === "3-3-1") {
     P[3] = { x: X.L, y: Y.DEF };
     P[2] = { x: X.C, y: Y.DEF };
     P[4] = { x: X.R, y: Y.DEF };
-    P[7] = { x: X.L, y: Y.MID };
+    P[10] = { x: X.L, y: Y.MID };
     P[5] = { x: X.C, y: Y.MID };
-    P[10] = { x: X.R, y: Y.MID };
+    P[7] = { x: X.R, y: Y.MID };
     P[9] = { x: X.C, y: Y.FWD };
   }
 
   if (formation === "2-3-2") {
-    P[3] = { x: X.L, y: Y.DEF };
-    P[4] = { x: X.R, y: Y.DEF };
-    P[5] = { x: X.L, y: Y.MID };
+    P[3] = { x: 30, y: Y.DEF };
+    P[4] = { x: 70, y: Y.DEF };
+    P[10] = { x: X.L, y: Y.MID };
     P[2] = { x: X.C, y: Y.MID };
-    P[10] = { x: X.R, y: Y.MID };
-    P[7] = { x: X.LM, y: Y.FWD };
-    P[9] = { x: X.RM, y: Y.FWD };
+    P[5] = { x: X.R, y: Y.MID };
+    P[9] = { x: X.LM, y: Y.FWD };
+    P[7] = { x: X.RM, y: Y.FWD };
   }
 
   if (formation === "2-2-3") {
@@ -129,9 +129,9 @@ function buildLayout(formation) {
     P[2] = { x: 70, y: Y.DEF };
     P[5] = { x: 35, y: Y.MID };
     P[4] = { x: 65, y: Y.MID };
-    P[7] = { x: 20, y: Y.FWD };
+    P[9] = { x: 20, y: Y.FWD };
     P[10] = { x: 50, y: Y.FWD };
-    P[9] = { x: 80, y: Y.FWD };
+    P[7] = { x: 80, y: Y.FWD };
   }
   return P;
 }
