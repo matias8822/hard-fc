@@ -21,6 +21,69 @@ const NUM_OFFSET   = -0.40; // número más arriba (negativo = sube)
 const NAME_OFFSET  =  0.38; // nombre más abajo (positivo = baja)
 const NAME_SCALE   =  0.90; // escala del font del nombre (0.9 = 90%)
 
+function isMobile() {
+  const ua = navigator.userAgent || "";
+  const isIOS     = /iPhone|iPad|iPod/i.test(ua);
+  const isAndroid = /Android/i.test(ua);
+  const isMobileUA = /Mobile/i.test(ua);
+  return (isIOS || isAndroid || isMobileUA);
+}
+
+async function shareOrDownload(blob, filename, fallbackText = "") {
+  // 👉 En PC: siempre descargar
+  if (!isMobile()) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    return;
+  }
+
+  // 👉 En móvil: intentar hoja de compartir (HTTPS + soporte)
+  try {
+    const file = new File([blob], filename, { type: blob.type || "image/png" });
+    if (
+      isSecureContext &&
+      navigator.canShare &&
+      navigator.canShare({ files: [file] }) &&
+      navigator.share
+    ) {
+      await navigator.share({
+        files: [file],
+        title: "Alineación HARD F.C.",
+        text: fallbackText || "Formación lista para el partido 💪",
+      });
+      return;
+    }
+  } catch (e) {
+    console.warn("Share falló; hago download:", e);
+  }
+
+  // Fallback en móvil si no hay share: descargar
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+const loadImage = (src) =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    // img.crossOrigin = "anonymous"; // solo si servís el logo desde otro dominio
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+
+
 // ========= helpers de nombre =========
 const NAME_CHAR_W = 0.6;
 
@@ -270,6 +333,7 @@ export default function App() {
 // Export directo a Canvas (sin html2canvas):
 // - rasteriza el SVG de la cancha
 // - dibuja jugadores encima
+// - comparte en móvil (Web Share API) o descarga si no está disponible
 const exportPNG = async () => {
   try {
     const wrapper = fieldRef.current; // <div ref={fieldRef}> contenedor de la cancha
@@ -305,6 +369,38 @@ const exportPNG = async () => {
     const ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(fieldImg, 0, 0, targetWidth, targetHeight);
+
+    // ------- Marcas de agua con el LOGO (forzadas en la exportación) -------
+try {
+  const logoImg = await loadImage(LOGO_IMG); // ya lo tenés importado arriba
+  const margin = Math.round(targetWidth * 0.02);
+  const wmW = Math.round(targetWidth * 0.18);          // 18% del ancho
+  const ratio = logoImg.naturalHeight / logoImg.naturalWidth;
+  const wmH = Math.round(wmW * ratio);
+
+  ctx.save();
+  ctx.globalAlpha = 0.16; // opacidad del watermark
+  // Superior derecha
+  ctx.drawImage(
+    logoImg,
+    targetWidth - margin - wmW,
+    margin,
+    wmW,
+    wmH
+  );
+  // Inferior izquierda
+  ctx.drawImage(
+    logoImg,
+    margin,
+    targetHeight - margin - wmH,
+    wmW,
+    wmH
+  );
+  ctx.restore();
+} catch (e) {
+  console.warn("No pude dibujar el watermark del logo:", e);
+}
+
 
     // 5) Dibujar jugadores (círculo + número + nombre más abajo)
     const rect = wrapper.getBoundingClientRect();
@@ -377,15 +473,11 @@ const exportPNG = async () => {
 
     URL.revokeObjectURL(svgUrl);
 
-    // 6) Descargar
-    canvas.toBlob((blob) => {
+    // 6) Compartir en móvil o descargar (fallback)
+    canvas.toBlob(async (blob) => {
       if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `alineacion_${formation}_HD.png`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const filename = `alineacion_${formation}_HD.png`;
+      await shareOrDownload(blob, filename, "Formación lista para el partido 💪");
     }, "image/png");
   } catch (e) {
     console.error("Export falló:", e);
