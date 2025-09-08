@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import FIELD_IMG from "./assets/cancha.png";
 import LOGO_IMG from "./assets/hard_fc_logo.png";
+import FieldSVG from "./FieldSVG"; // ruta correcta (mismo folder que App.jsx)
 
 // ================== Config ===================
 const ALLOWED_NUMBERS = [1, 2, 3, 4, 5, 7, 9, 10];
 
 // Y fijo por línea (en %)
-const Y = { FWD: 31.5, MID: 52.8, DEF: 73.6, GK: 91.8 };
+const Y = { FWD: 28, MID: 50, DEF: 70.5, GK: 90.5 };
 
 const px = (n) => `${n}px`;
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
@@ -16,6 +16,10 @@ const PRESETS_KEY = "alineador8v8_presets_v1";
 const PLAYER_SIZE = 56;
 const FIELD_HEIGHT = "min(72dvh, calc(100dvh - 240px))"; // dvh + margen de seguridad
 const FIELD_MAX_W = "min(92vw, 620px)";
+const EXPORT_WIDTH = 2400;  // tamaño del PNG (2:3). Más chico = archivo liviano.
+const NUM_OFFSET   = -0.40; // número más arriba (negativo = sube)
+const NAME_OFFSET  =  0.38; // nombre más abajo (positivo = baja)
+const NAME_SCALE   =  0.90; // escala del font del nombre (0.9 = 90%)
 
 // ========= helpers de nombre =========
 const NAME_CHAR_W = 0.6;
@@ -263,28 +267,131 @@ export default function App() {
     }
   };
 
-  // ------ export PNG
-  const exportPNG = async () => {
-    try {
-      const html2canvas = (await import("html2canvas")).default;
-      const node = fieldRef.current;
-      if (!node) return;
-      const canvas = await html2canvas(node, {
-        backgroundColor: null,
-        useCORS: true,
-        scale: 2,
-        logging: false,
+// Export directo a Canvas (sin html2canvas):
+// - rasteriza el SVG de la cancha
+// - dibuja jugadores encima
+const exportPNG = async () => {
+  try {
+    const wrapper = fieldRef.current; // <div ref={fieldRef}> contenedor de la cancha
+    if (!wrapper) return;
+
+    // 1) Tomar el <svg> de la cancha que ya renderizás
+    const svgEl = wrapper.querySelector("svg");
+    if (!svgEl) {
+      alert("No encontré el SVG de la cancha");
+      return;
+    }
+    const svgMarkup = new XMLSerializer().serializeToString(svgEl);
+    const svgBlob = new Blob([svgMarkup], { type: "image/svg+xml;charset=utf-8" });
+    const svgUrl = URL.createObjectURL(svgBlob);
+
+    // 2) Tamaño final del PNG (2:3)
+    const targetWidth  = EXPORT_WIDTH;
+    const targetHeight = Math.round(targetWidth * 3 / 2);
+
+    // 3) Cargar el SVG como imagen
+    const fieldImg = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.decoding = "async";
+      img.src = svgUrl;
+    });
+
+    // 4) Canvas destino y dibujar la cancha
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(fieldImg, 0, 0, targetWidth, targetHeight);
+
+    // 5) Dibujar jugadores (círculo + número + nombre más abajo)
+    const rect = wrapper.getBoundingClientRect();
+    const scale = targetWidth / rect.width;           // cuánto escala de pantalla → export
+    const size = Math.round(PLAYER_SIZE * scale);
+    const r = Math.round(size / 2);
+    const border = Math.max(2, Math.round(2 * scale));
+    const numFontPx = Math.max(14, Math.round(22 * scale));
+
+    players.forEach((p) => {
+      const x = Math.round((p.x / 100) * targetWidth);
+      const y = Math.round((p.y / 100) * targetHeight);
+
+      // sombra
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.45)";
+      ctx.shadowBlur = 16 * scale;
+      ctx.shadowOffsetY = 6 * scale;
+
+      // relleno radial
+      const grad = ctx.createRadialGradient(x - r * 0.2, y - r * 0.2, r * 0.1, x, y, r);
+      if (p.num === 1) { grad.addColorStop(0, "#fecaca"); grad.addColorStop(1, "#ef4444"); }
+      else             { grad.addColorStop(0, "#b7ff6e"); grad.addColorStop(1, "#39ff14"); }
+      ctx.fillStyle = grad;
+
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // borde
+      ctx.shadowColor = "transparent";
+      ctx.lineWidth = border;
+      ctx.strokeStyle = "rgba(255,255,255,0.95)";
+      ctx.stroke();
+      ctx.restore();
+
+      // Número (más arriba)
+      ctx.fillStyle = "#0b1020";
+      ctx.font = `bold ${numFontPx}px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.strokeStyle = "rgba(255,255,255,0.7)";
+      ctx.lineWidth = Math.max(1, Math.round(1 * scale));
+      const numY = y + r * NUM_OFFSET; // ▲ sube
+      ctx.strokeText(String(p.num), x, numY);
+      ctx.fillText(String(p.num), x, numY);
+
+      // Nombre (más abajo y un toque más chico)
+      const fitted = fitNameIntoCircle(p.name);
+      const exportFont = Math.max(8, Math.round(fitted.font * scale * NAME_SCALE));
+      const lineH = Math.round(exportFont * 1.08);
+
+      ctx.font = `900 ${exportFont}px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#0b1020";
+      ctx.strokeStyle = "rgba(255,255,255,0.7)";
+      ctx.lineWidth = Math.max(1, Math.round(1 * scale));
+
+      const totalH = lineH * fitted.lines.length;
+      const nameCenterY = y + r * NAME_OFFSET; // ▼ baja
+      const startY = Math.round(nameCenterY - (totalH - lineH) / 2);
+
+      fitted.lines.forEach((ln, i) => {
+        const yy = startY + i * lineH;
+        ctx.strokeText(ln, x, yy);
+        ctx.fillText(ln, x, yy);
       });
-      const url = canvas.toDataURL("image/png");
+    });
+
+    URL.revokeObjectURL(svgUrl);
+
+    // 6) Descargar
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `alineacion_${formation}.png`;
+      a.download = `alineacion_${formation}_HD.png`;
       a.click();
-    } catch (err) {
-      alert("Instalá html2canvas:  npm i html2canvas");
-      console.error(err);
-    }
-  };
+      URL.revokeObjectURL(url);
+    }, "image/png");
+  } catch (e) {
+    console.error("Export falló:", e);
+    alert("No pude exportar el PNG (mirá la consola para el error).");
+  }
+};
 
 // ------- estilos globales (controles iguales + select oscuro) -------
 const PlayerStyles = () => (
@@ -630,34 +737,35 @@ return (
       </div>
     </div>
 
-    {/* Cancha */}
-    <div
-      style={{
-        display: "grid",
-        placeItems: "center",
-        marginTop: px(8),
-        padding: "0 12px 14px",
-      }}
-    >
-      <div
-        ref={fieldRef}
-        className="field-fallback"
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        style={{
-          height: FIELD_HEIGHT,
-          aspectRatio: "2 / 3",
-          maxWidth: FIELD_MAX_W,
-          backgroundImage: `url(${FIELD_IMG})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          borderRadius: px(16),
-          boxShadow:
-            "0 16px 36px rgba(0,0,0,.45), inset 0 0 0 2px rgba(255,255,255,.08)",
-          position: "relative",
-          overflow: "hidden",
-        }}
-      >
+{/* Cancha */}
+<div style={{ display: "grid", placeItems: "center", marginTop: px(8), padding: "0 12px 14px" }}>
+  <div
+    ref={fieldRef}
+    onPointerMove={onPointerMove}
+    onPointerUp={onPointerUp}
+    style={{
+      height: FIELD_HEIGHT,
+      aspectRatio: "2 / 3",
+      maxWidth: FIELD_MAX_W,
+      position: "relative",
+      borderRadius: px(16),
+      overflow: "hidden",
+      boxShadow: "0 16px 36px rgba(0,0,0,.45), inset 0 0 0 2px rgba(255,255,255,.08)",
+      background: "transparent",
+    }}
+  >
+        {/* SVG como fondo absoluto */}
+        <FieldSVG
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            display: "block",
+            zIndex: 0,
+          }}
+        />
+      
         {/* Marca de agua inferior izquierda */}
         <img
           className="field-watermark"
