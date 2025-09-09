@@ -20,14 +20,18 @@ const EXPORT_WIDTH = 2400;  // tamaño del PNG (2:3). Más chico = archivo livia
 const NUM_OFFSET   = -0.40; // número más arriba (negativo = sube)
 const NAME_OFFSET  =  0.38; // nombre más abajo (positivo = baja)
 const NAME_SCALE   =  0.90; // escala del font del nombre (0.9 = 90%)
+const DBL_TAP_MS   = 650;   // ventana de doble tap/click más amplia
+
 
 function isMobile() {
+  if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent || "";
-  const isIOS     = /iPhone|iPad|iPod/i.test(ua);
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
   const isAndroid = /Android/i.test(ua);
   const isMobileUA = /Mobile/i.test(ua);
   return (isIOS || isAndroid || isMobileUA);
 }
+
 
 async function shareOrDownload(blob, filename, fallbackText = "") {
   // 👉 En PC: siempre descargar
@@ -220,6 +224,27 @@ export default function App() {
     );
   }, [layout]);
 
+  // 👉 NUEVO: recordar última formación
+  useEffect(() => {
+    const f = localStorage.getItem("alineador8v8_last_formation");
+    if (f) setFormation(f);
+    }, []);
+
+  useEffect(() => {
+    localStorage.setItem("alineador8v8_last_formation", formation);
+  }, [formation]);
+
+  // 👉 NUEVO: sincronizar presets entre pestañas con evento "storage"
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === PRESETS_KEY) {
+        setSelectedPreset((prev) => prev); // fuerza re-render → useMemo de presets se recalcula
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   // ------ presets
   const presets = useMemo(() => {
     try {
@@ -297,20 +322,34 @@ export default function App() {
     setDragging({ num, startX: e.clientX, startY: e.clientY, moved: false });
   };
 
-  const onPointerMove = (e) => {
-    if (!dragging) return;
-    const rect = fieldRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const dx = Math.abs(e.clientX - dragging.startX);
-    const dy = Math.abs(e.clientY - dragging.startY);
+const rafRef = useRef(null);
+
+const onPointerMove = (e) => {
+  if (!dragging) return;
+  if (rafRef.current) return; // ya hay un frame en cola
+
+  const rect = fieldRef.current?.getBoundingClientRect();
+  if (!rect) return;
+  const clientX = e.clientX, clientY = e.clientY;
+
+  rafRef.current = requestAnimationFrame(() => {
+    rafRef.current = null;
+    const dx = Math.abs(clientX - dragging.startX);
+    const dy = Math.abs(clientY - dragging.startY);
     const moved = dragging.moved || dx > 2 || dy > 2;
-    const xPct = clamp(((e.clientX - rect.left) / rect.width) * 100, 2, 98);
-    const yPct = clamp(((e.clientY - rect.top) / rect.height) * 100, 2, 98);
-    setPlayers((prev) =>
-      prev.map((p) => (p.num === dragging.num ? { ...p, x: xPct, y: yPct } : p))
+    const xPct = clamp(((clientX - rect.left) / rect.width) * 100, 2, 98);
+    const yPct = clamp(((clientY - rect.top) / rect.height) * 100, 2, 98);
+
+    setPlayers(prev =>
+      prev.map(p => (p.num === dragging.num ? { ...p, x: xPct, y: yPct } : p))
     );
-    setDragging((d) => ({ ...d, moved }));
-  };
+    setDragging(d => ({ ...d, moved }));
+  });
+};
+
+useEffect(() => () => {
+  if (rafRef.current) cancelAnimationFrame(rafRef.current);
+}, []);
 
   const onPointerUp = () => {
     if (!dragging) return;
@@ -319,7 +358,7 @@ export default function App() {
 
     if (!d.moved) {
       const now = Date.now();
-      if (lastClick.current.num === d.num && now - lastClick.current.ts < 500) {
+      if (lastClick.current.num === d.num && now - lastClick.current.ts < DBL_TAP_MS) {
         // segundo click rápido sobre el mismo jugador -> eliminar
         removePlayer(d.num);
         lastClick.current = { num: null, ts: 0 };
@@ -328,6 +367,11 @@ export default function App() {
         lastClick.current = { num: d.num, ts: now };
       }
     }
+  };
+
+  // 👉 NUEVO: para cortar drag si el navegador cancela o si el puntero sale de la cancha
+  const onPointerCancel = () => setDragging(null);
+  const onPointerLeave  = () => { if (dragging) setDragging(null); 
   };
 
 // Export directo a Canvas (sin html2canvas):
@@ -368,11 +412,18 @@ const exportPNG = async () => {
     canvas.height = targetHeight;
     const ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.miterLimit = 2.5;
     ctx.drawImage(fieldImg, 0, 0, targetWidth, targetHeight);
 
     // ------- Marcas de agua con el LOGO (forzadas en la exportación) -------
 try {
   const logoImg = await loadImage(LOGO_IMG); // ya lo tenés importado arriba
+    if (logoImg.decode) {
+    try { await logoImg.decode(); } catch {}
+  }
   const margin = Math.round(targetWidth * 0.02);
   const wmW = Math.round(targetWidth * 0.18);          // 18% del ancho
   const ratio = logoImg.naturalHeight / logoImg.naturalWidth;
@@ -401,13 +452,11 @@ try {
   console.warn("No pude dibujar el watermark del logo:", e);
 }
 
-
     // 5) Dibujar jugadores (círculo + número + nombre más abajo)
     const rect = wrapper.getBoundingClientRect();
     const scale = targetWidth / rect.width;           // cuánto escala de pantalla → export
     const size = Math.round(PLAYER_SIZE * scale);
     const r = Math.round(size / 2);
-    const border = Math.max(2, Math.round(2 * scale));
     const numFontPx = Math.max(14, Math.round(22 * scale));
 
     players.forEach((p) => {
@@ -417,7 +466,7 @@ try {
       // sombra
       ctx.save();
       ctx.shadowColor = "rgba(0,0,0,0.45)";
-      ctx.shadowBlur = 16 * scale;
+      ctx.shadowBlur = 18 * scale;
       ctx.shadowOffsetY = 6 * scale;
 
       // relleno radial
@@ -432,8 +481,8 @@ try {
 
       // borde
       ctx.shadowColor = "transparent";
-      ctx.lineWidth = border;
-      ctx.strokeStyle = "rgba(255,255,255,0.95)";
+      ctx.lineWidth = Math.max(2, Math.round(2.2 * scale)); // 👈 antes border
+      ctx.strokeStyle = "rgba(255,255,255,0.8)";
       ctx.stroke();
       ctx.restore();
 
@@ -833,8 +882,12 @@ return (
 <div style={{ display: "grid", placeItems: "center", marginTop: px(8), padding: "0 12px 14px" }}>
   <div
     ref={fieldRef}
+    role="img"
+    aria-label={`Cancha con ${players.length} jugadores en formación ${formation}`}
     onPointerMove={onPointerMove}
     onPointerUp={onPointerUp}
+    onPointerCancel={onPointerCancel}
+    onPointerLeave={onPointerLeave}
     style={{
       height: FIELD_HEIGHT,
       aspectRatio: "2 / 3",
@@ -901,6 +954,9 @@ return (
           return (
             <div
               key={p.num}
+              role="button"
+              tabIndex={0}
+              aria-label={`Jugador ${p.num}, ${p.name || 'sin nombre'}, posición X ${Math.round(p.x)}%, Y ${Math.round(p.y)}%`}
               onPointerDown={(e) => onPointerDown(e, p.num)}
               className={`player ${draggingThis ? "player--dragging" : ""}`}
               style={{
