@@ -6,14 +6,14 @@ import FieldSVG from "./FieldSVG"; // ruta correcta (mismo folder que App.jsx)
 const ALLOWED_NUMBERS = [1, 2, 3, 4, 5, 7, 9, 10];
 
 // Y fijo por línea (en %)
-const Y = { FWD: 28, MID: 50, DEF: 70.5, GK: 90.5 };
+const Y = { FWD: 28, MID: 50.5, DEF: 70, GK: 90.5 };
 
 const px = (n) => `${n}px`;
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const PRESETS_KEY = "alineador8v8_presets_v1";
 
 // Tamaños compactos
-const PLAYER_SIZE = 56;
+const PLAYER_SIZE = 60;
 const FIELD_HEIGHT = "min(72dvh, calc(100dvh - 240px))"; // dvh + margen de seguridad
 const FIELD_MAX_W = "min(92vw, 620px)";
 const EXPORT_WIDTH = 2400;  // tamaño del PNG (2:3). Más chico = archivo liviano.
@@ -21,7 +21,9 @@ const NUM_OFFSET   = -0.40; // número más arriba (negativo = sube)
 const NAME_OFFSET  =  0.38; // nombre más abajo (positivo = baja)
 const NAME_SCALE   =  0.90; // escala del font del nombre (0.9 = 90%)
 const DBL_TAP_MS   = 650;   // ventana de doble tap/click más amplia
-
+const EXPORT_REF_FIELD_PX = 620; // ancho de referencia para exportar (igual a maxWidth)
+const EXPORT_PLAYER_MULTIPLIER_DESKTOP = 1.8; // tamaño en PNG desde compu
+const EXPORT_PLAYER_MULTIPLIER_MOBILE  = 1.8; // tamaño en PNG desde celular
 
 function isMobile() {
   if (typeof navigator === "undefined") return false;
@@ -463,11 +465,12 @@ try {
 }
 
     // 5) Dibujar jugadores (círculo + número + nombre más abajo)
-    const rect = wrapper.getBoundingClientRect();
-    const scale = targetWidth / rect.width;           // cuánto escala de pantalla → export
-    const size = Math.round(PLAYER_SIZE * scale);
+    const scaleRef = targetWidth / EXPORT_REF_FIELD_PX;
+    const m = isMobile() ? EXPORT_PLAYER_MULTIPLIER_MOBILE : EXPORT_PLAYER_MULTIPLIER_DESKTOP;
+    const size = Math.round(PLAYER_SIZE * m * scaleRef);
     const r = Math.round(size / 2);
-    const numFontPx = Math.max(14, Math.round(22 * scale));
+    const playerScale = size / PLAYER_SIZE;
+    const numFontPx = Math.max(14, Math.round(22 * playerScale));
 
     players.forEach((p) => {
       const x = Math.round((p.x / 100) * targetWidth);
@@ -476,8 +479,8 @@ try {
       // sombra
       ctx.save();
       ctx.shadowColor = "rgba(0,0,0,0.45)";
-      ctx.shadowBlur = 18 * scale;
-      ctx.shadowOffsetY = 6 * scale;
+      ctx.shadowBlur = 18 * playerScale;
+      ctx.shadowOffsetY = 6 * playerScale;
 
       // relleno radial
       const grad = ctx.createRadialGradient(x - r * 0.2, y - r * 0.2, r * 0.1, x, y, r);
@@ -491,7 +494,7 @@ try {
 
       // borde
       ctx.shadowColor = "transparent";
-      ctx.lineWidth = Math.max(2, Math.round(2.2 * scale)); // 👈 antes border
+      ctx.lineWidth = Math.max(2, Math.round(2.2 * playerScale)); // 👈 antes border
       ctx.strokeStyle = "rgba(255,255,255,0.8)";
       ctx.stroke();
       ctx.restore();
@@ -502,46 +505,52 @@ try {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.strokeStyle = "rgba(255,255,255,0.7)";
-      ctx.lineWidth = Math.max(1, Math.round(1 * scale));
-      const numY = y + r * NUM_OFFSET; // ▲ sube
+      ctx.lineWidth = Math.max(1, Math.round(1 * playerScale));
+      const NUM_OFFSET = -0.45; // antes 0.10
+      const numY = y + r * NUM_OFFSET;
       ctx.strokeText(String(p.num), x, numY);
       ctx.fillText(String(p.num), x, numY);
 
-      // Nombre (más abajo y un toque más chico)
-      const fitted = fitNameIntoCircle(p.name);
-      const exportFont = Math.max(8, Math.round(fitted.font * scale * NAME_SCALE));
-      const lineH = Math.round(exportFont * 1.08);
+// === Tunables rápidos ===
+const NAME_FONT_BOOST   = 1.20;      // agrandar/reducir
+const NAME_Y_LIFT_R     = 0.20;      // subir el texto
+const NAME_LINE_H_MUL   = 0.80;      // interlineado
 
-      ctx.font = `900 ${exportFont}px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = "#0b1020";
-      ctx.strokeStyle = "rgba(255,255,255,0.7)";
-      ctx.lineWidth = Math.max(1, Math.round(1 * scale));
+// Nombre (simple, negro sólido)
+const fitted = fitNameIntoCircle(p.name);
+const exportFont = Math.max(
+  8,
+  Math.round(fitted.font * playerScale * NAME_SCALE * NAME_FONT_BOOST)
+);
+const lineH = Math.round(exportFont * NAME_LINE_H_MUL);
 
-      const totalH = lineH * fitted.lines.length;
-      const nameCenterY = y + r * NAME_OFFSET; // ▼ baja
-      const startY = Math.round(nameCenterY - (totalH - lineH) / 2);
+ctx.font = `900 ${exportFont}px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`;
+ctx.textAlign = "center";
+ctx.textBaseline = "middle";
+ctx.fillStyle   = "#000000"; // 🔥 negro sólido
 
-      fitted.lines.forEach((ln, i) => {
-        const yy = startY + i * lineH;
-        ctx.strokeText(ln, x, yy);
-        ctx.fillText(ln, x, yy);
-      });
+const nameCenterY = y + r * (NAME_OFFSET - NAME_Y_LIFT_R);
+const totalH = lineH * fitted.lines.length;
+const startY = Math.round(nameCenterY - (totalH - lineH) / 2);
+
+fitted.lines.forEach((ln, i) => {
+  const yy = startY + i * lineH;
+  ctx.fillText(ln, x, yy);
+});
     });
 
-    // 6) Dibujar nombre del plantel si hay uno seleccionado
-const teamName = selectedPreset || presetName || "";
-const teamSlug = slugifyTeamName(teamName);
-if (teamName) {
+  // 6) Dibujar nombre del plantel si hay uno seleccionado
+  const teamName = selectedPreset || presetName || "";
+  const teamSlug = slugifyTeamName(teamName);
+  if (teamName) {
   ctx.save();
-  const fontSize = Math.round(28 * scale); // tamaño relativo al PNG
+  const fontSize = Math.round(28 * scaleRef * 1.7); // tamaño relativo al PNG
   ctx.font = `900 ${fontSize}px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`;
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
   ctx.fillStyle = "#ffffff";
-  ctx.strokeStyle = "rgba(0,0,0,0.65)";
-  ctx.lineWidth = Math.max(3, Math.round(3 * scale));
+  ctx.strokeStyle = "rgba(0,0,0,0.85)";
+  ctx.lineWidth = Math.max(5, Math.round(5 * scaleRef));
 
   // Lo centramos arriba de todo
   const posY = Math.round(targetHeight * 0.095); // 6% desde arriba
