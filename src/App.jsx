@@ -374,6 +374,16 @@ useEffect(() => () => {
   const onPointerLeave  = () => { if (dragging) setDragging(null); 
   };
 
+  function slugifyTeamName(name) {
+  if (!name) return "";
+  return name
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // saca acentos
+    .replace(/[^a-zA-Z0-9\s_-]/g, "")                 // saca símbolos raros
+    .trim()
+    .replace(/\s+/g, "-")                              // espacios → guiones
+    .toUpperCase();                                    // opcional: mayúsculas
+}
+
 // Export directo a Canvas (sin html2canvas):
 // - rasteriza el SVG de la cancha
 // - dibuja jugadores encima
@@ -520,12 +530,35 @@ try {
       });
     });
 
+    // 6) Dibujar nombre del plantel si hay uno seleccionado
+const teamName = selectedPreset || presetName || "";
+const teamSlug = slugifyTeamName(teamName);
+if (teamName) {
+  ctx.save();
+  const fontSize = Math.round(28 * scale); // tamaño relativo al PNG
+  ctx.font = `900 ${fontSize}px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "rgba(0,0,0,0.65)";
+  ctx.lineWidth = Math.max(3, Math.round(3 * scale));
+
+  // Lo centramos arriba de todo
+  const posY = Math.round(targetHeight * 0.095); // 6% desde arriba
+  ctx.strokeText(teamName, targetWidth / 2, posY);
+  ctx.fillText(teamName, targetWidth / 2, posY);
+
+  ctx.restore();
+}
+
     URL.revokeObjectURL(svgUrl);
 
     // 6) Compartir en móvil o descargar (fallback)
     canvas.toBlob(async (blob) => {
       if (!blob) return;
-      const filename = `alineacion_${formation}_HD.png`;
+      const filename = teamSlug
+        ? `Alineacion_${formation}_${teamSlug}.png`
+        : `Alineacion_${formation}_HD.png`;
       await shareOrDownload(blob, filename, "Formación lista para el partido 💪");
     }, "image/png");
   } catch (e) {
