@@ -83,12 +83,12 @@ async function shareOrDownload(blob, filename, fallbackText = "") {
 const loadImage = (src) =>
   new Promise((resolve, reject) => {
     const img = new Image();
-    // img.crossOrigin = "anonymous"; // solo si servís el logo desde otro dominio
+    img.decoding = "async";          // 👈 ayuda a que decode() funcione bien
+    // img.crossOrigin = "anonymous"; // activar SOLO si servís el logo desde otro dominio/CDN con CORS
     img.onload = () => resolve(img);
     img.onerror = reject;
     img.src = src;
   });
-
 
 // ========= helpers de nombre =========
 const NAME_CHAR_W = 0.6;
@@ -430,19 +430,25 @@ const exportPNG = async () => {
     ctx.miterLimit = 2.5;
     ctx.drawImage(fieldImg, 0, 0, targetWidth, targetHeight);
 
-    // ------- Marcas de agua con el LOGO (forzadas en la exportación) -------
+// ------- Marcas de agua con el LOGO (forzadas en la exportación) -------
 try {
-  const logoImg = await loadImage(LOGO_IMG); // ya lo tenés importado arriba
-    if (logoImg.decode) {
-    try { await logoImg.decode(); } catch {}
-  }
+  const logoImg = await loadImage(LOGO_IMG);
+  // Forzar decodificación (mejora confiabilidad en desktop)
+  try { if (logoImg.decode) await logoImg.decode(); } catch {}
+
+  // Usar width/height (tras decode) en lugar de naturalWidth/Height
+  const imgW = logoImg.width || logoImg.naturalWidth;
+  const imgH = logoImg.height || logoImg.naturalHeight;
+  if (!imgW || !imgH) throw new Error("Logo sin dimensiones (no cargó)");
+
   const margin = Math.round(targetWidth * 0.02);
-  const wmW = Math.round(targetWidth * 0.18);          // 18% del ancho
-  const ratio = logoImg.naturalHeight / logoImg.naturalWidth;
+  const wmW = Math.round(targetWidth * 0.18); // 18% del ancho
+  const ratio = imgH / imgW;
   const wmH = Math.round(wmW * ratio);
 
   ctx.save();
-  ctx.globalAlpha = 0.16; // opacidad del watermark
+  ctx.globalAlpha = 0.16;
+
   // Superior derecha
   ctx.drawImage(
     logoImg,
@@ -451,6 +457,7 @@ try {
     wmW,
     wmH
   );
+
   // Inferior izquierda
   ctx.drawImage(
     logoImg,
@@ -459,6 +466,7 @@ try {
     wmW,
     wmH
   );
+
   ctx.restore();
 } catch (e) {
   console.warn("No pude dibujar el watermark del logo:", e);
