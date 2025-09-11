@@ -17,7 +17,7 @@ const PLAYER_SIZE = 60;
 const FIELD_HEIGHT = "min(72dvh, calc(100dvh - 240px))"; // dvh + margen de seguridad
 const FIELD_MAX_W = "min(92vw, 620px)";
 const EXPORT_WIDTH = 2400;  // tamaño del PNG (2:3). Más chico = archivo liviano.
-const NUM_OFFSET   = -0.40; // número más arriba (negativo = sube)
+const NUM_OFFSET   = -0.45; // número más arriba (negativo = sube)
 const NAME_OFFSET  =  0.38; // nombre más abajo (positivo = baja)
 const NAME_SCALE   =  0.90; // escala del font del nombre (0.9 = 90%)
 const DBL_TAP_MS   = 650;   // ventana de doble tap/click más amplia
@@ -257,15 +257,16 @@ export default function App() {
     }
   }, [presetName, selectedPreset, players.length, formation]);
 
-  const savePreset = () => {
-    const name = (presetName || "").trim();
-    if (!name) return alert("Poné un nombre para el plantel (Ej. HARD A).");
-    const all = { ...(presets || {}) };
-    all[name] = { formation, players, ts: Date.now() };
-    localStorage.setItem(PRESETS_KEY, JSON.stringify(all));
-    setSelectedPreset(name);
-    alert(`Plantel "${name}" guardado ✔️`);
-  };
+const savePreset = () => {
+  const name = (presetName || "").trim();
+  if (!name) return alert("Poné un nombre para el plantel (Ej. HARD A).");
+  const all = { ...(presets || {}) };
+  all[name] = { formation, players, ts: Date.now() };
+  localStorage.setItem(PRESETS_KEY, JSON.stringify(all));
+  setSelectedPreset(name);
+  setPresetName(""); // 👈 limpia el input después de guardar
+  alert(`Plantel "${name}" guardado ✔️`);
+};
 
   const loadPreset = () => {
     const data = (presets || {})[selectedPreset];
@@ -418,17 +419,28 @@ const exportPNG = async () => {
       img.src = svgUrl;
     });
 
-    // 4) Canvas destino y dibujar la cancha
-    const canvas = document.createElement("canvas");
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-    const ctx = canvas.getContext("2d");
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    ctx.miterLimit = 2.5;
-    ctx.drawImage(fieldImg, 0, 0, targetWidth, targetHeight);
+// 4) Canvas destino y dibujar la cancha (con DPR para nitidez)
+const canvas = document.createElement("canvas");
+const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1)); // 1,2,3...
+canvas.width = targetWidth * dpr;
+canvas.height = targetHeight * dpr;
+const ctx = canvas.getContext("2d");
+
+// Escalamos todo el contexto al DPR y luego trabajamos en coordenadas "CSS"
+ctx.scale(dpr, dpr);
+
+// Para que el export respete los px lógicos al crear el blob, seteamos el tamaño CSS
+canvas.style.width = `${targetWidth}px`;
+canvas.style.height = `${targetHeight}px`;
+
+ctx.imageSmoothingEnabled = true;
+ctx.imageSmoothingQuality = "high";
+ctx.lineJoin = "round";
+ctx.lineCap = "round";
+ctx.miterLimit = 2.5;
+
+// ¡Atención! Ahora usás targetWidth/targetHeight normales para todo
+ctx.drawImage(fieldImg, 0, 0, targetWidth, targetHeight);
 
 // ------- Marcas de agua con el LOGO (forzadas en la exportación) -------
 try {
@@ -507,17 +519,16 @@ try {
       ctx.stroke();
       ctx.restore();
 
-      // Número (más arriba)
-      ctx.fillStyle = "#0b1020";
-      ctx.font = `bold ${numFontPx}px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.strokeStyle = "rgba(255,255,255,0.7)";
-      ctx.lineWidth = Math.max(1, Math.round(1 * playerScale));
-      const NUM_OFFSET = -0.45; // antes 0.10
-      const numY = y + r * NUM_OFFSET;
-      ctx.strokeText(String(p.num), x, numY);
-      ctx.fillText(String(p.num), x, numY);
+// Número (más arriba)
+ctx.fillStyle = "#0b1020";
+ctx.font = `bold ${numFontPx}px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`;
+ctx.textAlign = "center";
+ctx.textBaseline = "middle";
+ctx.strokeStyle = "rgba(255,255,255,0.7)";
+ctx.lineWidth = Math.max(1, Math.round(1 * playerScale));
+const numY = y + r * NUM_OFFSET; // usa la global de arriba (-0.40 por defecto)
+ctx.strokeText(String(p.num), x, numY);
+ctx.fillText(String(p.num), x, numY);
 
 // === Tunables rápidos ===
 const NAME_FONT_BOOST   = 1.20;      // agrandar/reducir
@@ -561,7 +572,7 @@ fitted.lines.forEach((ln, i) => {
   ctx.lineWidth = Math.max(5, Math.round(5 * scaleRef));
 
   // Lo centramos arriba de todo
-  const posY = Math.round(targetHeight * 0.095); // 6% desde arriba
+  const posY = Math.round(targetHeight * 0.095);
   ctx.strokeText(teamName, targetWidth / 2, posY);
   ctx.fillText(teamName, targetWidth / 2, posY);
 
@@ -1092,7 +1103,5 @@ return (
 //git restore src/App.jsx
 
 //-------MEJORASS---------//
-//*CUANDO GUARDAS UNA FORMACION QUE SE BORRE EL NOMBRE DEL INPUT
 //*FOTOS A LOS JUGADORES PREDETERMINADOS
 //*EQUIPOS A Y B
-//que el PNG incluya nombre del plantel
