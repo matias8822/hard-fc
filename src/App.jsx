@@ -1050,28 +1050,74 @@ return (
               }}
               title="Arrastrá para mover. Doble click rápido para eliminar."
             >
-              <div style={{ fontSize: "22px", lineHeight: 1 }}>{p.num}</div>
+              {(() => {
+  const r = PLAYER_SIZE / 2;
 
-              {/* Nombre en 1-3 líneas */}
-              <div
-                style={{
-                  display: "grid",
-                  gap: "2px",
-                  justifyItems: "center",
-                  alignContent: "center",
-                  overflowWrap: "anywhere",
-                  wordBreak: "break-word",
-                  maxWidth: px(nameBoxMaxW),
-                  marginTop: px(1),
-                  lineHeight: 1.08,
-                  fontSize: px(font),
-                }}
-                title={p.name}
-              >
-                {lines.map((ln, i) => (
-                  <div key={i}>{ln}</div>
-                ))}
-              </div>
+  const NUM_FONT_PX = 22;
+  const numOffsetPx = Math.round(r * NUM_OFFSET);
+
+  const NAME_FONT_BOOST = 1.20;
+  const NAME_Y_LIFT_R   = 0.20;
+  const NAME_LINE_H_MUL = 0.80;
+
+  const nameBoxMaxW = PLAYER_SIZE - 6;
+  const fitted = fitNameIntoCircle(p.name);
+  const nameFont = Math.max(8, Math.round(fitted.font * NAME_SCALE * NAME_FONT_BOOST));
+  const lineH = Math.round(nameFont * NAME_LINE_H_MUL);
+
+  const nameCenterOffsetPx = Math.round(r * (NAME_OFFSET - NAME_Y_LIFT_R));
+  const totalH = lineH * fitted.lines.length;
+  const startYOffsetPx = Math.round(nameCenterOffsetPx - (totalH - lineH) / 2);
+
+  return (
+    <>
+      {/* Número */}
+      <div
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          transform: `translate(-50%, calc(-50% + ${numOffsetPx}px))`,
+          fontSize: `${NUM_FONT_PX}px`,
+          fontWeight: 900,
+          color: "#0b1020",
+          WebkitTextStroke: "1px rgba(255,255,255,0.7)",
+          pointerEvents: "none",
+        }}
+      >
+        {p.num}
+      </div>
+
+      {/* Nombre */}
+      <div
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          transform: `translate(-50%, calc(-50% + ${startYOffsetPx}px))`,
+          width: `${nameBoxMaxW}px`,
+          textAlign: "center",
+          color: "#000",
+          pointerEvents: "none",
+        }}
+        title={p.name}
+      >
+        {fitted.lines.map((ln, i) => (
+          <div
+            key={i}
+            style={{
+              fontSize: `${nameFont}px`,
+              lineHeight: `${lineH}px`,
+              fontWeight: 900,
+            }}
+          >
+            {ln}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+})()}
             </div>
           );
         })}
