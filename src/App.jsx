@@ -17,7 +17,7 @@ const PLAYER_SIZE = 60;
 const FIELD_HEIGHT = "min(72dvh, calc(100dvh - 240px))"; // dvh + margen de seguridad
 const FIELD_MAX_W = "min(92vw, 620px)";
 const EXPORT_WIDTH = 2400;  // tamaño del PNG (2:3). Más chico = archivo liviano.
-const NUM_OFFSET   = -0.45; // número más arriba (negativo = sube)
+const NUM_OFFSET   = -0.50; // número más arriba (negativo = sube)
 const NAME_OFFSET  =  0.38; // nombre más abajo (positivo = baja)
 const NAME_SCALE   =  0.90; // escala del font del nombre (0.9 = 90%)
 const DBL_TAP_MS   = 650;   // ventana de doble tap/click más amplia
@@ -33,7 +33,6 @@ function isMobile() {
   const isMobileUA = /Mobile/i.test(ua);
   return (isIOS || isAndroid || isMobileUA);
 }
-
 
 async function shareOrDownload(blob, filename, fallbackText = "") {
   // 👉 En PC: siempre descargar
@@ -1050,65 +1049,84 @@ return (
               }}
               title="Arrastrá para mover. Doble click rápido para eliminar."
             >
-              {(() => {
+{(() => {
+  // ========== CONTROLES SOLO DOM (modificá estos) ==========
+  // Número
+  const NUM_FONT_PX_DOM = 24;   // tamaño del número
+  const NUM_OFFSET_DOM  = -0.60; // desplazamiento vertical del número (en radios). Negativo = sube
+
+  // Nombre
+  const NAME_SCALE_DOM        = 0.95; // escala base
+  const NAME_FONT_BOOST_DOM   = 1.25; // agranda/achica todos los nombres
+  const NAME_LINE_H_MUL_DOM   = 0.80; // interlineado (0.95–1.10)
+  const NAME_SHIFT_R_DOM      = 0.30; // desplazamiento vertical (en radios). Negativo = sube
+  // ==========================================================
+
   const r = PLAYER_SIZE / 2;
 
-  const NUM_FONT_PX = 22;
-  const numOffsetPx = Math.round(r * NUM_OFFSET);
+  // ---------- Número ----------
+  const numOffsetPx = Math.round(r * NUM_OFFSET_DOM);
 
-  const NAME_FONT_BOOST = 1.20;
-  const NAME_Y_LIFT_R   = 0.20;
-  const NAME_LINE_H_MUL = 0.80;
+  // ---------- Nombre ----------
+  const { font, lines } = fitNameIntoCircle(p.name || "");
+  const nameFont = Math.max(
+    8,
+    Math.round(font * NAME_SCALE_DOM * NAME_FONT_BOOST_DOM)
+  );
+  const lineH   = Math.round(nameFont * NAME_LINE_H_MUL_DOM);
+  const totalH  = lineH * lines.length;
+
+  // centrado por alto real + shift en radios (independiente del PNG)
+  const centerShiftPx   = Math.round(r * NAME_SHIFT_R_DOM);
+  const startYOffsetPx  = centerShiftPx - Math.round((totalH - lineH) / 2);
 
   const nameBoxMaxW = PLAYER_SIZE - 6;
-  const fitted = fitNameIntoCircle(p.name);
-  const nameFont = Math.max(8, Math.round(fitted.font * NAME_SCALE * NAME_FONT_BOOST));
-  const lineH = Math.round(nameFont * NAME_LINE_H_MUL);
-
-  const nameCenterOffsetPx = Math.round(r * (NAME_OFFSET - NAME_Y_LIFT_R));
-  const totalH = lineH * fitted.lines.length;
-  const startYOffsetPx = Math.round(nameCenterOffsetPx - (totalH - lineH) / 2);
 
   return (
     <>
-      {/* Número */}
+      {/* Número (DOM) */}
       <div
         style={{
           position: "absolute",
           left: "50%",
           top: "50%",
           transform: `translate(-50%, calc(-50% + ${numOffsetPx}px))`,
-          fontSize: `${NUM_FONT_PX}px`,
+          fontSize: `${NUM_FONT_PX_DOM}px`,
           fontWeight: 900,
           color: "#0b1020",
-          WebkitTextStroke: "1px rgba(255,255,255,0.7)",
           pointerEvents: "none",
+          textAlign: "center",
         }}
       >
         {p.num}
       </div>
 
-      {/* Nombre */}
+      {/* Nombre (DOM) */}
       <div
         style={{
           position: "absolute",
           left: "50%",
           top: "50%",
-          transform: `translate(-50%, calc(-50% + ${startYOffsetPx}px))`,
+          transform: `translate(calc(-50% - 2.5px), calc(-50% + ${startYOffsetPx}px))`,
           width: `${nameBoxMaxW}px`,
           textAlign: "center",
           color: "#000",
           pointerEvents: "none",
+          fontWeight: 900,
         }}
         title={p.name}
       >
-        {fitted.lines.map((ln, i) => (
+        {lines.map((ln, i) => (
           <div
             key={i}
             style={{
               fontSize: `${nameFont}px`,
               lineHeight: `${lineH}px`,
-              fontWeight: 900,
+              whiteSpace: "nowrap",     // no partir cada línea (igual que en PNG)
+              wordBreak: "normal",
+              overflow: "visible",
+              margin: 0,
+              padding: 0,
             }}
           >
             {ln}
