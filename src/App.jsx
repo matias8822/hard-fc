@@ -16,7 +16,7 @@ const PRESETS_KEY = "alineador8v8_presets_v1";
 const PLAYER_SIZE = 60;
 const FIELD_HEIGHT = "min(72dvh, calc(100dvh - 240px))"; // dvh + margen de seguridad
 const FIELD_MAX_W = "min(92vw, 620px)";
-const EXPORT_WIDTH = 2400;  // tamaño del PNG (2:3). Más chico = archivo liviano.
+const EXPORT_WIDTH = isiOS() ? 2000 : 2400;  // en iPhone baja un poco el tamaño
 const NUM_OFFSET   = -0.50; // número más arriba (negativo = sube)
 const NAME_OFFSET  =  0.38; // nombre más abajo (positivo = baja)
 const NAME_SCALE   =  0.90; // escala del font del nombre (0.9 = 90%)
@@ -34,8 +34,38 @@ function isMobile() {
   return (isIOS || isAndroid || isMobileUA);
 }
 
+function isiOS() {
+  if (typeof navigator === "undefined") return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+         (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); // iPadOS
+}
+
+async function blobToDataURL(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(blob);
+  });
+}
+
+// Abre en nueva pestaña (fiable en Safari/iOS) para que el usuario guarde desde el visor
+async function openInNewTab(blob) {
+  const dataUrl = await blobToDataURL(blob);
+  const w = window.open();
+  if (w) {
+    w.document.write(`<html><head><title>PNG</title></head><body style="margin:0;background:#111;display:grid;place-items:center;height:100vh">
+      <img src="${dataUrl}" alt="Alineación" style="max-width:100vw;max-height:100vh"/>
+      </body></html>`);
+    w.document.close();
+  } else {
+    // fallback duro
+    location.href = dataUrl;
+  }
+}
+
 async function shareOrDownload(blob, filename, fallbackText = "") {
-  // 👉 En PC: siempre descargar
+  // 👉 En PC: descargar siempre
   if (!isMobile()) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -48,14 +78,13 @@ async function shareOrDownload(blob, filename, fallbackText = "") {
     return;
   }
 
-  // 👉 En móvil: intentar hoja de compartir (HTTPS + soporte)
+  // 👉 En móvil: intentar hoja de compartir con archivos
   try {
-    const file = new File([blob], filename, { type: blob.type || "image/png" });
+    const file = new File([blob], filename, { type: "image/png" });
     if (
       isSecureContext &&
-      navigator.canShare &&
-      navigator.canShare({ files: [file] }) &&
-      navigator.share
+      navigator.canShare && navigator.share &&
+      navigator.canShare({ files: [file] })
     ) {
       await navigator.share({
         files: [file],
@@ -65,18 +94,24 @@ async function shareOrDownload(blob, filename, fallbackText = "") {
       return;
     }
   } catch (e) {
-    console.warn("Share falló; hago download:", e);
+    console.warn("Share falló:", e);
   }
 
-  // Fallback en móvil si no hay share: descargar
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  // 👉 Fallback móvil:
+  // - En iOS, abrir en nueva pestaña con dataURL (fiable).
+  // - En otros móviles, probá descarga normal.
+  if (isiOS()) {
+    await openInNewTab(blob);
+  } else {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
 }
 
 const loadImage = (src) =>
@@ -580,14 +615,31 @@ fitted.lines.forEach((ln, i) => {
 
     URL.revokeObjectURL(svgUrl);
 
-    // 6) Compartir en móvil o descargar (fallback)
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
-      const filename = teamSlug
-        ? `Alineacion_${formation}_${teamSlug}.png`
-        : `Alineacion_${formation}_HD.png`;
-      await shareOrDownload(blob, filename, "Formación lista para el partido 💪");
-    }, "image/png");
+// 6) Compartir en móvil o descargar (fallback)
+let blob = await new Promise((resolve) => {
+  canvas.toBlob((b) => resolve(b), "image/png");
+});
+
+if (!blob) {
+  // Polyfill de toBlob con toDataURL
+  const dataUrl = canvas.toDataURL("image/png");
+  const byteString = atob(dataUrl.split(",")[1]);
+  const mimeString = dataUrl.split(",")[0].split(":")[1].split(";")[0];
+  const ab = new ArrayBuffer(byteString.length);
+  const ia = new Uint8Array(ab);
+  for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+  blob = new Blob([ab], { type: mimeString });
+}
+
+const filename = (() => {
+  const teamName = selectedPreset || presetName || "";
+  const teamSlug = slugifyTeamName(teamName);
+  return teamSlug
+    ? `Alineacion_${formation}_${teamSlug}.png`
+    : `Alineacion_${formation}_HD.png`;
+})();
+
+await shareOrDownload(blob, filename, "Formación lista para el partido 💪");
   } catch (e) {
     console.error("Export falló:", e);
     alert("No pude exportar el PNG (mirá la consola para el error).");
@@ -1007,8 +1059,6 @@ return (
         />
 
         {players.map((p) => {
-          const { font, lines } = fitNameIntoCircle(p.name);
-          const nameBoxMaxW = PLAYER_SIZE - 6;
           const draggingThis = dragging?.num === p.num;
 
           return (
