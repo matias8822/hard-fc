@@ -16,7 +16,11 @@ const PRESETS_KEY = "alineador8v8_presets_v1";
 const PLAYER_SIZE = 60;
 const FIELD_HEIGHT = "min(72dvh, calc(100dvh - 240px))"; // dvh + margen de seguridad
 const FIELD_MAX_W = "min(92vw, 620px)";
-const EXPORT_WIDTH = isiOS() ? 2000 : 2400;  // en iPhone baja un poco el tamaño
+// Calidad / tamaño por plataforma
+const EXPORT_WIDTH   = isiOS() ? 1600 : 2400;          // iPhone más chico
+const EXPORT_DPR     = isiOS() ? 1 : Math.max(1, Math.floor(window.devicePixelRatio || 1));
+const EXPORT_MIME    = isiOS() ? "image/jpeg" : "image/png"; // iPhone = JPG liviano
+const EXPORT_QUALITY = isiOS() ? 0.90 : 0.92;          // calidad JPG (PNG ignora este valor)
 const NUM_OFFSET   = -0.50; // número más arriba (negativo = sube)
 const NAME_OFFSET  =  0.38; // nombre más abajo (positivo = baja)
 const NAME_SCALE   =  0.90; // escala del font del nombre (0.9 = 90%)
@@ -455,7 +459,7 @@ const exportPNG = async () => {
 
 // 4) Canvas destino y dibujar la cancha (con DPR para nitidez)
 const canvas = document.createElement("canvas");
-const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1)); // 1,2,3...
+const dpr = EXPORT_DPR;
 canvas.width = targetWidth * dpr;
 canvas.height = targetHeight * dpr;
 const ctx = canvas.getContext("2d");
@@ -617,14 +621,16 @@ fitted.lines.forEach((ln, i) => {
 
 // 6) Compartir en móvil o descargar (fallback)
 let blob = await new Promise((resolve) => {
-  canvas.toBlob((b) => resolve(b), "image/png");
+  // Nota: QUALITY solo aplica si EXPORT_MIME es JPEG/WEBP (en PNG se ignora)
+  canvas.toBlob((b) => resolve(b), EXPORT_MIME, EXPORT_QUALITY);
 });
 
 if (!blob) {
-  // Polyfill de toBlob con toDataURL
-  const dataUrl = canvas.toDataURL("image/png");
-  const byteString = atob(dataUrl.split(",")[1]);
-  const mimeString = dataUrl.split(",")[0].split(":")[1].split(";")[0];
+  // Polyfill con dataURL respetando MIME/QUALITY cuando es JPEG
+  const dataUrl = canvas.toDataURL(EXPORT_MIME, EXPORT_QUALITY);
+  const parts = dataUrl.split(',');
+  const mimeString = parts[0].split(':')[1].split(';')[0];
+  const byteString = atob(parts[1]);
   const ab = new ArrayBuffer(byteString.length);
   const ia = new Uint8Array(ab);
   for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
@@ -634,9 +640,9 @@ if (!blob) {
 const filename = (() => {
   const teamName = selectedPreset || presetName || "";
   const teamSlug = slugifyTeamName(teamName);
-  return teamSlug
-    ? `Alineacion_${formation}_${teamSlug}.png`
-    : `Alineacion_${formation}_HD.png`;
+  const base = teamSlug ? `Alineacion_${formation}_${teamSlug}` : `Alineacion_${formation}_HD`;
+  const ext  = EXPORT_MIME === "image/jpeg" ? "jpg" : "png";
+  return `${base}.${ext}`;
 })();
 
 await shareOrDownload(blob, filename, "Formación lista para el partido 💪");
