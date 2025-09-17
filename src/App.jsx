@@ -69,7 +69,7 @@ async function openInNewTab(blob) {
 }
 
 async function shareOrDownload(blob, filename, fallbackText = "") {
-  // 👉 En PC: descargar siempre
+  // 🖥️ En desktop seguí descargando (no tiene sentido abrir share)
   if (!isMobile()) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -82,39 +82,29 @@ async function shareOrDownload(blob, filename, fallbackText = "") {
     return;
   }
 
-  // 👉 En móvil: intentar hoja de compartir con archivos
-  try {
-    const file = new File([blob], filename, { type: "image/png" });
-    if (
-      isSecureContext &&
-      navigator.canShare && navigator.share &&
-      navigator.canShare({ files: [file] })
-    ) {
-      await navigator.share({
-        files: [file],
-        title: "Alineación HARD F.C.",
-        text: fallbackText || "Formación lista para el partido 💪",
-      });
-      return;
-    }
-  } catch (e) {
-    console.warn("Share falló:", e);
+  // 📱 En móvil: FORZAR SIEMPRE navigator.share con archivos
+  const extFromType =
+    blob.type === "image/jpeg" ? "jpg" :
+    blob.type === "image/png"  ? "png" : "bin";
+
+  const safeName = filename.replace(/\.(png|jpg|jpeg)$/i, `.${extFromType}`);
+  const file = new File([blob], safeName, { type: blob.type || "application/octet-stream" });
+
+  if (!(isSecureContext && navigator.share && navigator.canShare && navigator.canShare({ files: [file] }))) {
+    alert("Este navegador no permite compartir archivos de imagen. Abrí la página en Safari/Chrome con HTTPS.");
+    return; // ❗️No hay fallback: si no soporta, no hace nada más
   }
 
-  // 👉 Fallback móvil:
-  // - En iOS, abrir en nueva pestaña con dataURL (fiable).
-  // - En otros móviles, probá descarga normal.
-  if (isiOS()) {
-    await openInNewTab(blob);
-  } else {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+  try {
+    await navigator.share({
+      files: [file],
+      title: "Alineación HARD F.C.",
+      text: fallbackText || "Formación lista para el partido 💪",
+    });
+  } catch (err) {
+    // Usuario canceló o fallo del sistema
+    console.warn("navigator.share falló o fue cancelado:", err);
+    // No hacemos nada más porque pediste 'siempre share' (sin visor ni descarga)
   }
 }
 
