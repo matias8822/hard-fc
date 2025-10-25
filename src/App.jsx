@@ -502,7 +502,7 @@ const matches = useMemo(() => {
   }
 
   function slugifyMatchName(name) {
-    if (!name) return "PARTIDO";
+    if (!name) return "";
     return name
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-zA-Z0-9\s_-]/g, "")
@@ -971,13 +971,16 @@ const deleteMatch = () => {
 };
 
 const exportBothPNG = async () => {
-  const base = slugifyMatchName(matchName) || "PARTIDO";
+const base = slugifyMatchName(matchName); // puede ser "" si está vacío
+const nameA = slugifyTeamName(teamNames.A || "Equipo A");
+const nameB = slugifyTeamName(teamNames.B || "Equipo B");
 
-  const nameA = (teamNames.A || "Equipo A").trim().replace(/\s+/g, "-");
-  const nameB = (teamNames.B || "Equipo B").trim().replace(/\s+/g, "-");
+// 👇 construimos los nombres sin guiones sobrantes
+const fileA = base ? `${base}_${nameA}` : `${nameA}`;
+const fileB = base ? `${base}_${nameB}` : `${nameB}`;
 
-  await exportPNGFor(teamA.players, teamA.formation, `${base}_${nameA}`, "A");
-  await exportPNGFor(teamB.players, teamB.formation, `${base}_${nameB}`, "B");
+await exportPNGFor(teamA.players, teamA.formation, fileA, "A");
+await exportPNGFor(teamB.players, teamB.formation, fileB, "B");
 };
 
   // ------- estilos globales (controles iguales + select oscuro) -------
