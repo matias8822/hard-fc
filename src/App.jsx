@@ -704,7 +704,7 @@ const loadPreset = () => {
       const teamSlug = slugifyTeamName(teamName);
       if (teamName) {
         ctx.save();
-        const fontSize = Math.round(28 * scaleRef * 1.7);
+        const fontSize = Math.round(23 * scaleRef * 1.4);
         ctx.font = `900 ${fontSize}px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
