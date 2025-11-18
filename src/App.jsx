@@ -533,6 +533,34 @@ const loadPreset = () => {
       .toUpperCase();
   }
 
+function parseDateFromName(name) {
+  if (!name) return null;
+  const trimmed = name.trim();
+
+  // 1) Formato DD/MM o DD-MM → usa año actual
+  let m = trimmed.match(/(\d{1,2})[\/\-](\d{1,2})$/);
+  if (m) {
+    const [, d, mo] = m;
+    const year = new Date().getFullYear();
+    const date = new Date(year, Number(mo) - 1, Number(d));
+    const ts = date.getTime();
+    return isNaN(ts) ? null : ts;
+  }
+
+  // 2) Formato DD/MM/YYYY o DD-MM-YYYY
+  m = trimmed.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (m) {
+    let [, d, mo, y] = m;
+    let year = Number(y);
+    if (y.length === 2) year += 2000; 
+    const date = new Date(year, Number(mo) - 1, Number(d));
+    const ts = date.getTime();
+    return isNaN(ts) ? null : ts;
+  }
+
+  return null;
+}
+
   // ===== Export (single, tu versión) =====
   const exportPNG = async () => {
     try {
@@ -1228,11 +1256,30 @@ await exportPNGFor(teamB.players, teamB.formation, fileB, "B");
               title="Elegir plantel guardado"
             >
               <option value="">Cargar…</option>
-              {Object.keys(presets).map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
+              {Object.keys(presets)
+                .sort((a, b) => {
+                  const da = parseDateFromName(a);
+                  const db = parseDateFromName(b);
+
+                  // ambos tienen fecha → ordenar por fecha ascendente
+                  if (da !== null && db !== null) return da - db;
+
+                  // uno tiene fecha, otro no → el que tiene va primero
+                  if (da !== null && db === null) return -1;
+                  if (da === null && db !== null) return 1;
+
+                  // ninguno tiene fecha → ordenar por fecha de guardado
+                  const ta = presets[a]?.ts ?? 0;
+                  const tb = presets[b]?.ts ?? 0;
+                  if (ta !== tb) return ta - tb;
+
+                  return a.localeCompare(b);
+                })
+                .map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
             </select>
 
             <button className="btn btn--primary control" onClick={loadPreset} title="Cargar plantel seleccionado">
