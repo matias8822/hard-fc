@@ -316,27 +316,49 @@ const matches = useMemo(() => {
     }
   }, [presetName, selectedPreset, players.length, formation]);
 
-  const savePreset = () => {
-    const name = (presetName || "").trim();
-    if (!name) return alert("Poné un nombre para el plantel (Ej. HARD A).");
-    const all = { ...(presets || {}) };
-    all[name] = { formation, players, ts: Date.now() };
-    localStorage.setItem(PRESETS_KEY, JSON.stringify(all));
-    setSelectedPreset(name);
-    setPresetName(""); // limpia el input después de guardar
-    alert(`Plantel "${name}" guardado ✔️`);
+const savePreset = () => {
+  const name = (presetName || "").trim();
+  if (!name) return alert("Poné un nombre para el plantel.");
+
+  const all = { ...(presets || {}) };
+
+  // 👇 Si ya existe → preguntar si sobrescribir
+  if (all[name]) {
+    const ok = confirm(`El plantel "${name}" ya existe.\n\n¿Querés sobrescribirlo?`);
+    if (!ok) return;
+  }
+
+  // Guardar / Sobrescribir
+  all[name] = {
+    formation,
+    players,
+    ts: Date.now(),
   };
 
-  const loadPreset = () => {
-    const data = (presets || {})[selectedPreset];
-    if (!data) return alert("Elegí un plantel para cargar.");
-    setFormation(data.formation || "3-2-2");
-    const fixed = (data.players || []).map((p) => {
-      const pos = buildLayout(data.formation || "3-2-2")[p.num] || { x: 50, y: 50 };
-      return { ...p, x: pos.x, y: pos.y };
-    });
-    setPlayers(fixed);
-  };
+  localStorage.setItem(PRESETS_KEY, JSON.stringify(all));
+
+  setSelectedPreset(name);
+  setPresetName(""); // limpiar input
+
+  alert(`Plantel "${name}" guardado ✔️`);
+};
+
+const loadPreset = () => {
+  const data = (presets || {})[selectedPreset];
+  if (!data) return alert("Elegí un plantel para cargar.");
+
+  // Cargar formación + jugadores
+  setFormation(data.formation || "3-2-2");
+
+  const fixed = (data.players || []).map((p) => {
+    const pos = buildLayout(data.formation || "3-2-2")[p.num] || { x: 50, y: 50 };
+    return { ...p, x: pos.x, y: pos.y };
+  });
+  setPlayers(fixed);
+
+  // 👇 NUEVO: mostrar el nombre en el input
+  setPresetName(selectedPreset);
+};
 
   const deletePreset = () => {
     const name = selectedPreset;
